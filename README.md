@@ -343,7 +343,7 @@ npm run preview
 
 ## Known limitations
 
-- **Small models are limited.** LaMini can repeat itself and forgets older turns. SmolLM2 and Qwen are better but still far from large hosted models.
+- **Small models are limited.** LaMini can repeat itself and forgets older turns. SmolLM2 and Qwen are better but still far from large hosted models. Prompting reduces, but does not eliminate, hallucinated or role-played dialogue; malformed replies are detected and retried or replaced with a transparent fallback.
 - **First load is heavy.** The balanced model is roughly 276 MB. Slow connections may take minutes.
 - **WebGPU support varies.** Some adapters fail at runtime; the worker retries on CPU/WASM and reports the fallback.
 - **Browser voices vary by operating system.** Some are network-backed, some are local, and availability can change after page load.

@@ -15,7 +15,9 @@ import {
   buildCausalMessages,
   buildFallbackChatPrompt,
   buildSeq2SeqPrompt,
-  cleanModelOutput,
+  getGenerationConfig,
+  isMalformedModelOutput,
+  validateModelOutput,
 } from '../generation/promptBuilder'
 import {
   getModelById,
@@ -500,18 +502,31 @@ async function generate(
     })
 
     const generator = runtime.instance
-    const maxNewTokens = Math.max(16, Math.min(1024, options.maxNewTokens))
-
-    const output = await generator(prompt, {
-      max_new_tokens: maxNewTokens,
-      temperature: Math.max(0.05, options.temperature),
-      top_p: Math.max(0.1, Math.min(1, options.topP)),
-      do_sample: options.temperature > 0.15,
-      repetition_penalty: 1.08,
-      no_repeat_ngram_size: 3,
-      streamer,
-      stopping_criteria: [criteria],
+    const genConfig = getGenerationConfig(modelId, {
+      maxNewTokens: options.maxNewTokens,
+      temperature: options.temperature,
+      topP: options.topP,
     })
+
+    const runGeneration = async (configOverride?: Partial<typeof genConfig>) => {
+      const cfg = { ...genConfig, ...configOverride }
+      const result = await generator(prompt, {
+        max_new_tokens: cfg.max_new_tokens,
+        min_new_tokens: cfg.min_new_tokens,
+        temperature: cfg.temperature,
+        top_p: cfg.top_p,
+        top_k: cfg.top_k,
+        do_sample: cfg.do_sample,
+        repetition_penalty: cfg.repetition_penalty,
+        no_repeat_ngram_size: cfg.no_repeat_ngram_size,
+        early_stopping: cfg.early_stopping,
+        streamer,
+        stopping_criteria: [criteria],
+      })
+      return result
+    }
+
+    const output = await runGeneration()
 
     flushTokens(true)
 
@@ -533,12 +548,63 @@ async function generate(
       }
     }
 
-    finalText = cleanModelOutput(finalText)
+    let validation = validateModelOutput(finalText, prompt)
+    finalText = validation.text
 
-    if (!finalText.trim()) {
-      throw new Error(
-        'The model returned an empty response. Try rephrasing your message or a different model.',
-      )
+    // One controlled regeneration when the first answer is clearly malformed.
+    if (!validation.valid && !active.aborted) {
+      let retryStreamed = ''
+      const retryStreamer = new TextStreamer(tokenizer, {
+        skip_prompt: true,
+        skip_special_tokens: true,
+        callback_function: (token: string) => {
+          if (active.aborted) return
+          retryStreamed += token
+        },
+      })
+      try {
+        const retryOutput = await generator(prompt, {
+          max_new_tokens: Math.min(96, genConfig.max_new_tokens),
+          min_new_tokens: 1,
+          temperature: 0.1,
+          top_p: 0.85,
+          top_k: 30,
+          do_sample: false,
+          repetition_penalty: 1.02,
+          no_repeat_ngram_size: 3,
+          streamer: retryStreamer,
+          stopping_criteria: [criteria],
+        })
+        let retryText = retryStreamed
+        if (!retryText.trim()) {
+          const raw = Array.isArray(retryOutput) ? retryOutput[0] : retryOutput
+          const generated =
+            raw?.generated_text ?? raw?.translation_text ?? raw?.text ?? ''
+          if (typeof generated === 'string') {
+            retryText =
+              info.architecture === 'causal' && generated.startsWith(prompt)
+                ? generated.slice(prompt.length)
+                : generated
+          }
+        }
+        const retryValidation = validateModelOutput(retryText, prompt)
+        if (retryValidation.valid) {
+          finalText = retryValidation.text
+          validation = retryValidation
+        }
+      } catch {
+        // Keep the first (cleaned) result if regeneration fails.
+      }
+    }
+
+    if (active.aborted) {
+      post({ type: 'cancelled', requestId })
+      return
+    }
+
+    if (!finalText.trim() || isMalformedModelOutput(finalText, prompt)) {
+      finalText =
+        'I could not generate a reliable response for that request. Please try rephrasing your message.'
     }
 
     const durationMs = performance.now() - started

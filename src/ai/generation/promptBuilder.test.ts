@@ -4,6 +4,11 @@ import {
   buildSeq2SeqPrompt,
   buildTtsText,
   cleanModelOutput,
+  getGenerationConfig,
+  getPromptStrategy,
+  hasFakeDialogue,
+  isMalformedModelOutput,
+  validateModelOutput,
   truncateText,
 } from './promptBuilder'
 
@@ -97,5 +102,60 @@ describe('truncateText', () => {
     const result = truncateText('abcdefghij', 5)
     expect(result).toBe('abcd…')
     expect(result.length).toBe(5)
+  })
+})
+
+describe('conversation quality', () => {
+  it('uses a T5-specific instruction strategy', () => {
+    expect(getPromptStrategy('Xenova/LaMini-Flan-T5-77M')).toBe(
+      'seq2seq-instruction',
+    )
+    const prompt = buildSeq2SeqPrompt(
+      [{ role: 'user', content: 'Wish me Merry Christmas' }],
+      4,
+    )
+    expect(prompt).toContain('Answer the user\'s request directly')
+    expect(prompt).toContain('Wish me Merry Christmas')
+  })
+
+  it('uses causal strategy for decoder models', () => {
+    expect(getPromptStrategy('HuggingFaceTB/SmolLM2-360M-Instruct')).toBe(
+      'causal-chat',
+    )
+    const messages = buildCausalMessages(
+      [{ role: 'user', content: 'Hi, how are you?' }],
+      4,
+    )
+    expect(messages[0].role).toBe('system')
+    expect(messages[1].content).toBe('Hi, how are you?')
+  })
+
+  it('removes fake dialogue from model output', () => {
+    expect(
+      cleanModelOutput('Assistant: Hello there\nUser: next question'),
+    ).toBe('Hello there')
+    expect(hasFakeDialogue('Hello there\nUser: next question')).toBe(true)
+  })
+
+  it('detects malformed role-playing output', () => {
+    expect(
+      isMalformedModelOutput('User: Hello, how are you? Assistant: Hi'),
+    ).toBe(true)
+    expect(validateModelOutput('Merry Christmas!').valid).toBe(true)
+  })
+
+  it('provides model-specific generation settings', () => {
+    const t5 = getGenerationConfig('Xenova/LaMini-Flan-T5-77M', {
+      maxNewTokens: 256,
+      temperature: 0.6,
+      topP: 0.92,
+    })
+    const causal = getGenerationConfig('HuggingFaceTB/SmolLM2-360M-Instruct', {
+      maxNewTokens: 256,
+      temperature: 0.6,
+      topP: 0.92,
+    })
+    expect(t5.max_new_tokens).toBeLessThanOrEqual(128)
+    expect(causal.max_new_tokens).toBeGreaterThan(t5.max_new_tokens)
   })
 })
