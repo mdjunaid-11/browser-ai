@@ -6,21 +6,28 @@ import { AnimalAvatar } from './AnimalAvatar'
 interface AvatarPickerProps {
   value: AnimalId
   onChange: (animal: AnimalId) => void
+  /** Kept for API compatibility; cards are always large and readable now. */
   compact?: boolean
+  className?: string
 }
 
+/**
+ * Responsive companion grid: 2 columns on phones, 3 on tablets and 5 on
+ * desktop. Every card is a full illustration with its name underneath.
+ */
 export function AvatarPicker({
   value,
   onChange,
-  compact = false,
+  compact: _compact = false,
+  className,
 }: AvatarPickerProps) {
   return (
     <div
       role="radiogroup"
       aria-label="Choose your companion"
       className={cn(
-        'grid gap-2',
-        compact ? 'grid-cols-5 sm:grid-cols-9' : 'grid-cols-3 sm:grid-cols-5',
+        'grid w-full min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5',
+        className,
       )}
     >
       {ANIMAL_LIST.map((animal) => {
@@ -34,27 +41,29 @@ export function AvatarPicker({
             aria-label={`${animal.label} — ${animal.tagline}`}
             onClick={() => onChange(animal.id)}
             className={cn(
-              'group relative flex flex-col items-center gap-1 rounded-2xl border p-2 transition',
+              'group relative flex min-w-0 flex-col items-center justify-center gap-2 rounded-2xl border px-2 py-4 transition sm:px-3',
+              'min-h-[8.5rem] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]',
               active
-                ? 'border-[var(--border-strong)] bg-[var(--accent-soft)] shadow-[0_8px_30px_-16px_rgba(139,92,246,0.9)]'
-                : 'border-transparent bg-[var(--surface-2)] hover:border-[var(--border)] hover:bg-[var(--surface-3)]',
+                ? 'border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_18px_50px_-26px_rgba(139,92,246,0.95)]'
+                : 'border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-3)]',
             )}
           >
-            <AnimalAvatar
-              animal={animal.id}
-              state={active ? 'happy' : 'idle'}
-              size={compact ? 46 : 62}
-            />
-            <span
-              className={cn(
-                'text-[11px] font-semibold',
-                active ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]',
-              )}
-            >
+            <span className="grid h-[4.75rem] w-full max-w-[5.5rem] place-items-center overflow-visible">
+              <AnimalAvatar
+                animal={animal.id}
+                state={active ? 'happy' : 'idle'}
+                size={76}
+                className="max-w-full"
+              />
+            </span>
+            <span className="w-full truncate text-center text-xs font-semibold sm:text-sm">
               {animal.label}
             </span>
             {active && (
-              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-[var(--accent)]/50 animate-selection-glow"
+              />
             )}
           </button>
         )

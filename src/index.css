@@ -898,6 +898,30 @@ input[type='range']::-moz-range-thumb {
   animation-delay: 0.3s;
 }
 
+@keyframes selection-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.animate-selection-glow {
+  animation: selection-glow 2.8s ease-in-out infinite;
+}
+
+/* Never let long model names or code blocks widen the application shell. */
+.app-shell,
+.app-main,
+.chat-scroll,
+.message-bubble,
+.card {
+  min-width: 0;
+  max-width: 100%;
+}
+
 /* ---------------------------------------------------------- reduce motion */
 
 :root[data-reduce-motion='true'] *,

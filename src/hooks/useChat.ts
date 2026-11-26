@@ -10,6 +10,7 @@ import {
   CancelledError,
   modelManager,
 } from '../ai/models/modelManager'
+import { isTextSessionReady } from '../ai/models/textModelGate'
 import {
   createId,
   deleteConversation as deleteConversationRecord,
@@ -305,10 +306,13 @@ export function useChat(options: UseChatOptions) {
   } => {
     const session = modelManager.getTextSession()
     if (
-      !modelManager.isTextModelReady() ||
+      !isTextSessionReady(
+        session,
+        settingsRef.current.textModelId,
+        (modelId) => modelManager.isReady(modelId),
+      ) ||
       !session.modelId ||
-      !session.backend ||
-      session.modelId !== settingsRef.current.textModelId
+      !session.backend
     ) {
       throw new Error(
         modelManager.getTextSession().state === 'error'

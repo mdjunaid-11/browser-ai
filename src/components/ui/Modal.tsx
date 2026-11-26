@@ -105,13 +105,13 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         className={cn(
-          'relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface-1)] shadow-[0_30px_120px_-20px_rgba(0,0,0,0.8)] animate-modal-in',
+          'relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface-1)] shadow-[0_30px_120px_-20px_rgba(0,0,0,0.8)] animate-modal-in',
           sizeClasses[size],
           className,
         )}
       >
         {(title || !hideClose) && (
-          <div className="flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] px-5 py-4 sm:px-7 sm:py-5">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[var(--border-subtle)] px-5 py-4 sm:px-7 sm:py-5">
             <div className="min-w-0">
               {title && (
                 <h2
@@ -129,7 +129,7 @@ export function Modal({
               <button
                 type="button"
                 onClick={onClose}
-                className="btn-icon -mr-1 shrink-0"
+                className="btn-icon -mr-1 h-11 w-11 shrink-0"
                 aria-label="Close"
               >
                 <Icon name="x" size={19} />
@@ -138,12 +138,12 @@ export function Modal({
           </div>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        <div className="min-h-0 w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto scrollbar-thin">
           {children}
         </div>
 
         {footer && (
-          <div className="border-t border-[var(--border-subtle)] bg-[var(--surface-2)]/60 px-5 py-4 sm:px-7">
+          <div className="max-h-[35dvh] shrink-0 overflow-y-auto border-t border-[var(--border-subtle)] bg-[var(--surface-2)]/60 px-5 py-4 scrollbar-thin sm:px-7">
             {footer}
           </div>
         )}

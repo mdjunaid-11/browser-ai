@@ -43,6 +43,8 @@ export function useSettings() {
   }, [])
 
   useEffect(() => {
+    // Device detection must start once on mount; state is owned by this hook.
+    // eslint-disable-next-line react/set-state-in-effect
     void detect()
   }, [detect])
 

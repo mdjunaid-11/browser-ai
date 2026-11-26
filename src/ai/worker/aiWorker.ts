@@ -49,6 +49,8 @@ const loaded = new Map<ModelKind, RuntimeModel>()
 const loadPromises = new Map<string, Promise<RuntimeModel>>()
 const activeRequests = new Map<string, ActiveRequest>()
 const busyKinds = new Set<ModelKind>()
+/** ONNX inference is serialised per kind; partial windows cannot overlap finals. */
+let asrQueue: Promise<void> = Promise.resolve()
 
 let config = {
   maxLoadedPipelines: 2,
@@ -620,6 +622,9 @@ async function transcribe(
       // words and must not be reported as an error.
       if (!active.aborted) {
         post({ type: 'transcript-partial', requestId, text })
+        // Resolve the request as well; the preview is advisory, but the
+        // promise must settle so the partial window loop can continue.
+        post({ type: 'transcribed', requestId, text })
       }
       return
     }
@@ -916,16 +921,16 @@ ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
       )
       break
 
-    case 'transcribe':
-      void transcribe(
-        message.requestId,
-        message.modelId,
-        message.backend,
-        message.audio,
-        message.language,
-        message.partial === true,
-      )
+    case 'transcribe': {
+      const { requestId, modelId, backend, audio, language } = message
+      const partial = message.partial === true
+      asrQueue = asrQueue
+        .then(() => transcribe(requestId, modelId, backend, audio, language, partial))
+        .catch(() => {
+          // transcribe() reports its own errors through worker messages.
+        })
       break
+    }
 
     case 'synthesize':
       void synthesize(

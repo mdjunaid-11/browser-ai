@@ -67,7 +67,6 @@ export function webSpeechPrivacyNote(): string {
 export class WebSpeechRecognition {
   private recognition: SpeechRecognitionLike | null = null
   private finalText = ''
-  private options: WebSpeechOptions | null = null
   private active = false
   private stopping = false
 
@@ -85,7 +84,6 @@ export class WebSpeechRecognition {
 
     this.finalText = ''
     this.stopping = false
-    this.options = options
 
     try {
       const recognition = new Constructor()
@@ -173,6 +171,5 @@ export class WebSpeechRecognition {
     }
     this.recognition = null
     this.active = false
-    this.options = null
   }
 }

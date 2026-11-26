@@ -9,6 +9,8 @@ import { useChat } from './hooks/useChat'
 import { useVoiceInput } from './hooks/useVoiceInput'
 import { useTTS } from './hooks/useTTS'
 import { useModelStatus } from './hooks/useModelStatus'
+import { useTextModelSession } from './hooks/useTextModelSession'
+import { isTextSessionReady } from './ai/models/textModelGate'
 import { checkModelCompatibility } from './ai/models/modelCompatibility'
 import { formatModelSize, getModelById } from './ai/models/modelRegistry'
 import { modelManager } from './ai/models/modelManager'
@@ -42,6 +44,12 @@ function App() {
   } = useSettings()
   const toast = useToast()
   const { statuses, getStatus, refresh: refreshStatuses } = useModelStatus()
+  const textSession = useTextModelSession()
+  const textReady = isTextSessionReady(
+    textSession,
+    settings.textModelId,
+    (modelId) => modelManager.isReady(modelId),
+  )
 
   const [draft, setDraft] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -82,6 +90,14 @@ function App() {
     settings,
     capabilities,
     onTranscript: (text) => {
+      if (!textReady) {
+        toast.warning(
+          'Model not ready',
+          'Initialize the AI model before sending voice messages.',
+        )
+        setDraft(text)
+        return
+      }
       if (settings.autoSubmitTranscript && !chat.isGenerating) {
         setDraft('')
         void chat.sendMessage(text)
@@ -112,6 +128,7 @@ function App() {
     onEnd: () => {
       setSpeakingMessageId(null)
       const canContinue =
+        textReady &&
         settings.voiceMode === 'auto' &&
         settings.autoSpeak &&
         settings.onboarded &&
@@ -142,7 +159,7 @@ function App() {
       }
       void voiceInput.startListening()
     }
-  })
+  }, [tts, voiceInput])
 
   useEffect(() => {
     modelManager.configure(settings, capabilities)
@@ -179,7 +196,7 @@ function App() {
   const handleSend = useCallback(
     (text?: string) => {
       const value = (text ?? draft).trim()
-      if (!value || chat.isGenerating) return
+      if (!value || !textReady || chat.isGenerating) return
       suppressAutoListen.current = false
       if (tts.speaking || tts.synthesizing) {
         tts.stop()
@@ -194,7 +211,7 @@ function App() {
       setDraft('')
       void chat.sendMessage(value)
     },
-    [chat, draft, tts, voiceInput],
+    [chat, draft, textReady, tts, voiceInput],
   )
 
   const handleSpeak = useCallback(
@@ -211,20 +228,20 @@ function App() {
   }, [tts])
 
   const handleStartListening = useCallback(() => {
+    if (!textReady) {
+      toast.warning('Model not ready', 'Initialize the AI model before using voice.')
+      return
+    }
     if (tts.speaking) {
       suppressAutoListen.current = true
       tts.stop()
       setSpeakingMessageId(null)
     }
     void voiceInput.startListening()
-  }, [tts, voiceInput])
+  }, [textReady, toast, tts, voiceInput])
 
   const handleStopListening = useCallback(() => {
     void voiceInput.stopListening()
-  }, [voiceInput])
-
-  const handleCancelListening = useCallback(() => {
-    void voiceInput.cancelListening()
   }, [voiceInput])
 
   const handleDownloadModel = useCallback(
@@ -266,7 +283,8 @@ function App() {
 
       try {
         if (kind === 'text') {
-          await modelManager.loadText(modelId, compatibility.backend)
+          // The text model is the only one allowed to unlock chat.
+          await modelManager.initializeTextModel(modelId)
         } else if (kind === 'asr') {
           await modelManager.loadAsr(modelId, compatibility.backend)
         } else {
@@ -282,6 +300,39 @@ function App() {
     },
     [capabilities, settings, toast],
   )
+
+  const handleInitializeSession = useCallback(async () => {
+    if (!capabilities) {
+      toast.warning('Device not ready', 'Wait for the device check to finish.')
+      return
+    }
+    const model = getModelById(settings.textModelId)
+    toast.info(
+      'Initializing AI model',
+      model
+        ? `${model.label} · ${formatModelSize(model.approxSizeMB)}. You must keep this tab open.`
+        : 'Loading the selected model.',
+    )
+    try {
+      await modelManager.initializeTextModel(settings.textModelId)
+      toast.success('AI model ready', 'You can now start chatting.')
+    } catch (error) {
+      toast.error(
+        'AI model failed to load',
+        error instanceof Error ? error.message : 'An unexpected error occurred.',
+      )
+    }
+  }, [capabilities, settings.textModelId, toast])
+
+  const handleRestorePreviousModel = useCallback(async () => {
+    const restored = await modelManager.restorePreviousTextModel()
+    if (!restored) {
+      toast.warning('No previous model', 'Choose another compatible model instead.')
+      return
+    }
+    updateSettings({ textModelId: restored })
+    toast.success('Previous model restored', 'Chat is unlocked again.')
+  }, [toast, updateSettings])
 
   const handleClearConversations = useCallback(async () => {
     await chat.clearAllConversations()
@@ -323,13 +374,17 @@ function App() {
   }, [resetSettings, tts, toast])
 
   const handleCompleteSetup = useCallback(() => {
+    if (!textReady) {
+      toast.warning(
+        'Initialize the AI model first',
+        'Chat stays locked until the text model is ready.',
+      )
+      return
+    }
     completeOnboarding()
     setShowSetup(false)
-    toast.success(
-      'Your companion is ready',
-      'Say hello or type a message. The first reply downloads the model once.',
-    )
-  }, [completeOnboarding, toast])
+    toast.success('Your companion is ready', 'Say hello or type a message.')
+  }, [completeOnboarding, textReady, toast])
 
   const handleTestVoice = useCallback(() => {
     speakRef.current(
@@ -355,7 +410,24 @@ function App() {
   })()
 
   const textModel = getModelById(settings.textModelId)
-  const textStatus = getStatus(settings.textModelId)
+  const rawTextStatus = getStatus(settings.textModelId)
+  const textStatus = textReady
+    ? {
+        ...(rawTextStatus ?? {
+          modelId: settings.textModelId,
+          kind: 'text' as ModelKind,
+          state: 'idle' as const,
+          progress: 0,
+          loadedBytes: 0,
+          totalBytes: 0,
+        }),
+        state: 'ready' as const,
+        progress: 1,
+        device: (textSession.backend ?? rawTextStatus?.device ?? 'wasm') as
+          | 'wasm'
+          | 'webgpu',
+      }
+    : rawTextStatus
   const voiceAvailable =
     tts.supported || settings.ttsEngine === 'kokoro' || settings.voiceMode !== 'text'
   const title = chat.activeConversation?.title ?? 'New conversation'
@@ -364,6 +436,7 @@ function App() {
     return (
       <SetupWizard
         settings={settings}
+        session={textSession}
         capabilities={capabilities}
         assessment={assessment}
         detecting={detecting}
@@ -371,6 +444,9 @@ function App() {
         onRefreshCapabilities={refreshCapabilities}
         onSetMode={setMode}
         onUpdate={updateSettings}
+        onInitialize={handleInitializeSession}
+        onRetry={handleInitializeSession}
+        onRestorePrevious={handleRestorePreviousModel}
         onComplete={handleCompleteSetup}
       />
     )
@@ -460,6 +536,7 @@ function App() {
               }
               textModelId={settings.textModelId}
               voiceEnabled={settings.voiceMode !== 'text'}
+              modelReady={textReady}
               onOpenSetup={() => setShowSetup(true)}
             />
 
@@ -473,10 +550,20 @@ function App() {
               voiceState={voiceInput.state}
               voiceLevel={voiceInput.level}
               voiceError={voiceInput.error}
+              voicePreview={voiceInput.preview}
+              voicePreviewKind={voiceInput.previewKind}
+              voiceMetrics={voiceInput.metrics}
+              voiceEngine={voiceInput.activeEngine}
+              canRetryVoice={voiceInput.canRetryAudio}
               micSupported={voiceInput.isSupported}
               onStartListening={handleStartListening}
               onStopListening={handleStopListening}
-              onCancelListening={handleCancelListening}
+              onCancelListening={() => void voiceInput.cancelListening()}
+              onRetryVoice={() => void voiceInput.retryTranscription()}
+              modelSession={textSession}
+              onInitialize={() => void handleInitializeSession()}
+              onRetryModel={() => void handleInitializeSession()}
+              onOpenSetup={() => setShowSetup(true)}
             />
           </div>
 
@@ -489,6 +576,7 @@ function App() {
                   size={150}
                   level={voiceInput.level}
                   showWaveform={settings.showWaveform}
+                  locked={!textReady}
                   compact
                 />
                 <div className="mt-3 flex w-full flex-wrap justify-center gap-1.5">

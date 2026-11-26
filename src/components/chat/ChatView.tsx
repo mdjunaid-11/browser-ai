@@ -22,6 +22,7 @@ interface ChatViewProps {
   onStartVoice?: () => void
   textModelId: string
   voiceEnabled: boolean
+  modelReady: boolean
   onOpenSetup?: () => void
 }
 
@@ -64,6 +65,7 @@ export function ChatView({
   onStartVoice,
   textModelId,
   voiceEnabled,
+  modelReady,
   onOpenSetup,
 }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -109,15 +111,17 @@ export function ChatView({
               state={isGenerating ? 'thinking' : 'idle'}
               size={180}
               showWaveform={false}
+              locked={!modelReady}
             />
           </div>
 
           <h1 className="mt-5 text-2xl font-bold tracking-tight text-[var(--text)] sm:text-3xl">
-            What’s on your mind?
+            {modelReady ? 'What’s on your mind?' : 'Load your AI model to start chatting'}
           </h1>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-[var(--text-muted)]">
-            Ask anything. Your companion thinks locally, in this tab, and never
-            sends your words to a server.
+            {modelReady
+              ? 'Ask anything. Your companion thinks locally, in this tab, and never sends your words to a server.'
+              : 'Use the Initialize AI Model button below this panel. Nothing is downloaded until you confirm.'}
           </p>
 
           <div className="mt-6 grid w-full max-w-xl gap-2 sm:grid-cols-2">
@@ -125,8 +129,11 @@ export function ChatView({
               <button
                 key={suggestion.title}
                 type="button"
-                onClick={() => onSuggestion(suggestion.prompt)}
-                className="group flex items-start gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/70 p-3 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-3)]"
+                onClick={() => {
+                  if (modelReady) onSuggestion(suggestion.prompt)
+                }}
+                disabled={!modelReady}
+                className="group flex min-h-14 items-start gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/70 p-3 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
                   <Icon name={suggestion.icon} size={14} />
@@ -144,7 +151,7 @@ export function ChatView({
           </div>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-            {voiceEnabled && onStartVoice && (
+            {modelReady && voiceEnabled && onStartVoice && (
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
@@ -171,9 +178,9 @@ export function ChatView({
           </div>
 
           <p className="mt-4 max-w-md text-[11px] leading-relaxed text-[var(--text-subtle)]">
-            The first reply downloads the model once ({model ? formatModelSize(model.approxSizeMB) : 'a few hundred MB'}) and
-            caches it in your browser. Local models can be wrong — verify
-            important information.
+            {modelReady
+              ? `The model is cached after the first successful load (${model ? formatModelSize(model.approxSizeMB) : 'a few hundred MB'}). Local models can be wrong — verify important information.`
+              : 'Conversations stay in this browser. Loading the model is an explicit action, never automatic on page open.'}
           </p>
         </div>
       </div>

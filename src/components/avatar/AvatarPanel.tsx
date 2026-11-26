@@ -20,6 +20,8 @@ interface AvatarPanelProps {
   level?: number
   showWaveform?: boolean
   compact?: boolean
+  /** Chat is locked until the selected text model finishes initializing. */
+  locked?: boolean
   className?: string
 }
 
@@ -30,9 +32,13 @@ export function AvatarPanel({
   level = 0,
   showWaveform = true,
   compact = false,
+  locked = false,
   className,
 }: AvatarPanelProps) {
-  const label = STATE_LABELS[state]
+  const label =
+    locked && state === 'idle'
+      ? { title: 'Model locked', detail: 'Initialize the AI model to chat' }
+      : STATE_LABELS[state]
 
   return (
     <div

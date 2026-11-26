@@ -19,7 +19,8 @@ public/ort
 *.onnx
 *.onnx_data
 *.bin
-models/
+# Root-level local model cache only; src/ai/models contains source code.
+/models/
 .cache/
 .huggingface/
 

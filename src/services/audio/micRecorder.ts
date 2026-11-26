@@ -105,6 +105,7 @@ export class MicRecorder {
   private lastLevel = 0
   private options: MicRecorderOptions = {}
   private autoStopTimer: number | null = null
+  private autoStopRequested = false
 
   isRecording(): boolean {
     return this.recording
@@ -130,6 +131,7 @@ export class MicRecorder {
     this.voiceFrames = 0
     this.lastLevel = 0
     this.stopping = false
+    this.autoStopRequested = false
 
     let stream: MediaStream
     try {
@@ -199,7 +201,9 @@ export class MicRecorder {
   }
 
   private handleAudio(event: AudioProcessingEvent): void {
-    if (!this.recording || this.stopping) return
+    // Auto-stop only asks the caller to finalise. Keep buffering until stop()
+    // is actually called: model loading must never truncate the recording.
+    if (!this.recording) return
 
     const input = event.inputBuffer.getChannelData(0)
     if (!input || input.length === 0) return
@@ -245,13 +249,23 @@ export class MicRecorder {
   }
 
   private requestAutoStop(): void {
-    if (this.stopping) return
-    this.stopping = true
+    if (this.stopping || this.autoStopRequested) return
+    this.autoStopRequested = true
     if (this.autoStopTimer !== null) {
       window.clearTimeout(this.autoStopTimer)
       this.autoStopTimer = null
     }
     this.options.onAutoStop?.()
+  }
+
+  /** Current 16 kHz audio without releasing the microphone. */
+  snapshot(): Float32Array {
+    return downsampleTo16k(mergeChunks(this.chunks), this.inputSampleRate)
+  }
+
+  /** Milliseconds of audio captured so far. */
+  getDurationMs(): number {
+    return (this.totalSamples / this.inputSampleRate) * 1000
   }
 
   async stop(): Promise<Float32Array> {
@@ -276,21 +290,15 @@ export class MicRecorder {
     await this.teardown()
 
     const merged = mergeChunks(chunks)
-    const audio = downsampleTo16k(merged, inputRate)
-
-    if (audio.length < 16000 * 0.35) {
-      throw new MicrophoneError(
-        'That recording was too short. Hold the microphone button a little longer and speak clearly.',
-        'TOO_SHORT',
-      )
-    }
-
-    return audio
+    // Return even very short recordings. The caller decides how to report
+    // them so audio is never silently discarded after a failed load.
+    return downsampleTo16k(merged, inputRate)
   }
 
   async cancel(): Promise<void> {
     this.recording = false
     this.stopping = true
+    this.autoStopRequested = false
     this.chunks = []
     this.totalSamples = 0
     this.lastLevel = 0

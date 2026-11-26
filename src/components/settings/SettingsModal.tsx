@@ -571,8 +571,10 @@ export function SettingsModal({
                 ))}
               </div>
               <p className="mt-2 text-[10px] leading-relaxed text-[var(--text-subtle)]">
-                LaMini models use the CC-BY-NC-4.0 license and may not be used
-                commercially. SmolLM2 and Qwen2.5 are Apache-2.0.
+                Switching or loading a text model locks chat until that exact
+                model is initialized. Conversations are preserved. LaMini models
+                use CC-BY-NC-4.0 (non-commercial); SmolLM2 and Qwen2.5 are
+                Apache-2.0.
               </p>
             </Section>
 
@@ -710,6 +712,64 @@ export function SettingsModal({
                   />
                 </label>
               </div>
+            </Section>
+
+            <Section
+              title="Recognition engine"
+              description="Private local recognition keeps audio on this device. Fast recognition may use your browser vendor's online service."
+            >
+              <SegmentedControl
+                label="Recognition engine"
+                value={settings.asrEngine}
+                onChange={(asrEngine) => onUpdate({ asrEngine })}
+                options={[
+                  { value: 'private', label: 'Private local' },
+                  { value: 'fast', label: 'Fast' },
+                  { value: 'auto', label: 'Automatic' },
+                ]}
+              />
+              {settings.asrEngine !== 'private' && (
+                <label className="mt-3 flex min-h-11 items-start gap-3 rounded-xl border border-amber-400/25 bg-amber-400/10 p-3 text-[11px] leading-relaxed text-amber-200">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 shrink-0 accent-violet-500"
+                    checked={settings.fastRecognitionAccepted}
+                    onChange={(event) =>
+                      onUpdate({ fastRecognitionAccepted: event.target.checked })
+                    }
+                  />
+                  <span>
+                    I understand fast recognition may send audio to my browser
+                    vendor. Private local recognition is used without this
+                    consent.
+                  </span>
+                </label>
+              )}
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <Slider
+                  label="Silence before finalising"
+                  value={settings.voiceSilenceMs}
+                  min={800}
+                  max={5000}
+                  step={200}
+                  onChange={(voiceSilenceMs) => onUpdate({ voiceSilenceMs })}
+                  display={`${(settings.voiceSilenceMs / 1000).toFixed(1)} s`}
+                />
+                <Slider
+                  label="Maximum recording"
+                  value={settings.voiceMaxDurationMs}
+                  min={15000}
+                  max={180000}
+                  step={5000}
+                  onChange={(voiceMaxDurationMs) => onUpdate({ voiceMaxDurationMs })}
+                  display={`${Math.round(settings.voiceMaxDurationMs / 1000)} s`}
+                />
+              </div>
+              <p className="mt-1 text-[10px] leading-relaxed text-[var(--text-subtle)]">
+                Short pauses no longer end a recording. You can always press
+                stop manually and retry failed transcription without speaking
+                again.
+              </p>
             </Section>
 
             <Section title="Voice engine">
