@@ -6,6 +6,8 @@ import tailwindcss from '@tailwindcss/vite'
 // Relative base keeps every asset working when the app is served from a
 // GitHub Pages repository sub-path (e.g. /browser-ai/) or a custom domain.
 export default defineConfig({
+  // Required for GitHub Pages project sites served under /<repo>/.
+  base: './',
   plugins: [
     react(),
     tailwindcss(),
