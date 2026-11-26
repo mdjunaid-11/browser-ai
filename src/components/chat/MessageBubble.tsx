@@ -56,7 +56,7 @@ export function MessageBubble({
           <div className="rounded-2xl rounded-br-md border border-[var(--border)] bg-[var(--surface-3)] px-4 py-2.5 text-[15px] leading-relaxed text-[var(--text)] shadow-sm">
             <p className="whitespace-pre-wrap break-words">{message.content}</p>
           </div>
-          <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+          <div className="flex flex-wrap items-center gap-1 touch-visible-actions transition">
             <span className="mr-1 text-[10px] text-[var(--text-subtle)]">
               {formatClock(message.createdAt)}
             </span>
@@ -164,7 +164,7 @@ export function MessageBubble({
             </span>
           ) : null}
 
-          <div className="ml-auto flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-0.5 touch-visible-actions transition">
             <button
               type="button"
               className="btn-icon h-6 w-6"

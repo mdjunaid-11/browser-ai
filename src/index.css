@@ -129,6 +129,13 @@ body {
 button,
 [role='button'] {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* SVG paths must never swallow taps meant for their parent button. */
+button svg,
+[role='button'] svg {
+  pointer-events: none;
 }
 
 /* ---------------------------------------------------------------- layout */
@@ -272,6 +279,8 @@ button,
   place-items: center;
   width: 2.4rem;
   height: 2.4rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   border-radius: 0.8rem;
   border: 1px solid transparent;
   color: var(--text-muted);
@@ -291,6 +300,22 @@ button,
 .btn-icon:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* Secondary actions stay tappable on touch devices; hover-only on desktop. */
+.touch-visible-actions {
+  opacity: 1;
+}
+
+@media (hover: hover) and (min-width: 640px) {
+  .touch-visible-actions {
+    opacity: 0;
+  }
+
+  .group:hover .touch-visible-actions,
+  .touch-visible-actions:focus-within {
+    opacity: 1;
+  }
 }
 
 .input,

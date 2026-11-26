@@ -202,7 +202,7 @@ export function Sidebar({
                             onSelect(conversation.id)
                             onClose()
                           }}
-                          className="min-w-0 flex-1 rounded-xl px-2.5 py-2 text-left"
+                          className="min-w-0 flex-1 rounded-xl py-2 pl-2.5 pr-24 text-left sm:pr-2.5"
                         >
                           <span
                             className={cn(
@@ -223,7 +223,7 @@ export function Sidebar({
                             </span>
                           </span>
                         </button>
-                        <div className="absolute right-1 flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+                        <div className="absolute right-1 flex items-center gap-0.5 touch-visible-actions transition">
                           <button
                             type="button"
                             className="btn-icon h-6 w-6"
