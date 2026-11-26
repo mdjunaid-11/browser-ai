@@ -10,8 +10,6 @@ import {
   CancelledError,
   modelManager,
 } from '../ai/models/modelManager'
-import { checkModelCompatibility } from '../ai/models/modelCompatibility'
-import { getModelById } from '../ai/models/modelRegistry'
 import {
   createId,
   deleteConversation as deleteConversationRecord,
@@ -82,7 +80,6 @@ export function useChat(options: UseChatOptions) {
   const activeIdRef = useRef<string | null>(null)
   const messagesRef = useRef<ChatMessage[]>([])
   const settingsRef = useRef(options.settings)
-  const capabilitiesRef = useRef(options.capabilities)
   const callbacksRef = useRef(options)
   const abortRef = useRef<AbortController | null>(null)
   const cancelledRef = useRef(false)
@@ -91,7 +88,6 @@ export function useChat(options: UseChatOptions) {
 
   useEffect(() => {
     settingsRef.current = options.settings
-    capabilitiesRef.current = options.capabilities
     callbacksRef.current = options
   })
 
@@ -299,40 +295,29 @@ export function useChat(options: UseChatOptions) {
     [applyMessages, stopRevealTimer],
   )
 
-  const ensureTextModel = useCallback(async (): Promise<{
+  /**
+   * Generation never initialises a model. The readiness gate is owned by
+   * modelManager, so every entry point shares this exact check.
+   */
+  const requireReadyTextModel = useCallback((): {
     modelId: string
     backend: 'wasm' | 'webgpu'
-  }> => {
-    const settings = settingsRef.current
-    const capabilities = capabilitiesRef.current
-    const model = getModelById(settings.textModelId)
-    if (!model || model.kind !== 'text') {
-      throw new Error('The selected text model is not available.')
-    }
-
-    let backend: 'wasm' | 'webgpu' = 'wasm'
-    if (capabilities) {
-      const compatibility = checkModelCompatibility(
-        model,
-        capabilities,
-        settings.backend,
-        settings.mode,
+  } => {
+    const session = modelManager.getTextSession()
+    if (
+      !modelManager.isTextModelReady() ||
+      !session.modelId ||
+      !session.backend ||
+      session.modelId !== settingsRef.current.textModelId
+    ) {
+      throw new Error(
+        modelManager.getTextSession().state === 'error'
+          ? modelManager.getTextSession().error ??
+              'The AI model failed to initialize.'
+          : 'Load your AI model to start chatting',
       )
-      if (!compatibility.compatible) {
-        throw new Error(
-          compatibility.warnings[0] ??
-            'This model is not compatible with this browser.',
-        )
-      }
-      backend = compatibility.backend
     }
-
-    if (!modelManager.isReady(model.id)) {
-      setStatus('loading')
-      await modelManager.loadText(model.id, backend)
-    }
-
-    return { modelId: model.id, backend }
+    return { modelId: session.modelId, backend: session.backend }
   }, [])
 
   const runAssistant = useCallback(
@@ -340,6 +325,8 @@ export function useChat(options: UseChatOptions) {
       conversation: Conversation,
       history: ChatMessage[],
     ): Promise<void> => {
+      // Gate before any message is created or persisted.
+      requireReadyTextModel()
       const now = Date.now()
       const assistant: ChatMessage = {
         id: createId(),
@@ -375,7 +362,7 @@ export function useChat(options: UseChatOptions) {
       abortRef.current = controller
 
       try {
-        const { modelId, backend } = await ensureTextModel()
+        const { modelId, backend } = requireReadyTextModel()
         if (cancelledRef.current) return
 
         setStatus('thinking')
@@ -473,13 +460,18 @@ export function useChat(options: UseChatOptions) {
         setStreamingMessageId(null)
       }
     },
-    [applyMessages, ensureTextModel, finalizeAssistant, startReveal],
+    [applyMessages, finalizeAssistant, requireReadyTextModel, startReveal],
   )
 
   const sendMessage = useCallback(
     async (rawText: string): Promise<void> => {
       const text = rawText.trim()
       if (!text || generatingRef.current) return
+      try {
+        requireReadyTextModel()
+      } catch {
+        return
+      }
 
       let conversation: Conversation | undefined
       const currentId = activeIdRef.current
@@ -541,6 +533,7 @@ export function useChat(options: UseChatOptions) {
       applyConversations,
       applyMessages,
       persistConversation,
+      requireReadyTextModel,
       runAssistant,
       updateConversation,
     ],
@@ -561,6 +554,11 @@ export function useChat(options: UseChatOptions) {
 
   const regenerate = useCallback(async (): Promise<void> => {
     if (generatingRef.current) return
+    try {
+      requireReadyTextModel()
+    } catch {
+      return
+    }
     const currentId = activeIdRef.current
     if (!currentId) return
 
@@ -592,7 +590,7 @@ export function useChat(options: UseChatOptions) {
     })
 
     await runAssistant(conversation, history)
-  }, [applyMessages, runAssistant, updateConversation])
+  }, [applyMessages, requireReadyTextModel, runAssistant, updateConversation])
 
   const newConversation = useCallback(() => {
     if (generatingRef.current) stopGeneration()

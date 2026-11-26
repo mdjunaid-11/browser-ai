@@ -54,6 +54,8 @@ export interface TranscribeRequest {
   backend: Backend
   audio: Float32Array
   language?: string
+  /** A bounded audio window used only for a partial hypothesis. */
+  partial?: boolean
 }
 
 export interface SynthesizeRequest {
@@ -132,6 +134,13 @@ export interface WorkerTranscribedResponse {
   text: string
 }
 
+/** A lower-confidence hypothesis from a bounded audio window, not final text. */
+export interface WorkerPartialTranscriptResponse {
+  type: 'transcript-partial'
+  requestId: string
+  text: string
+}
+
 export interface WorkerAudioResponse {
   type: 'audio'
   requestId: string
@@ -176,6 +185,7 @@ export type WorkerResponse =
   | WorkerTokenResponse
   | WorkerDoneResponse
   | WorkerTranscribedResponse
+  | WorkerPartialTranscriptResponse
   | WorkerAudioResponse
   | WorkerCancelledResponse
   | WorkerErrorResponse

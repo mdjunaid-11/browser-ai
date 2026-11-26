@@ -577,6 +577,7 @@ async function transcribe(
   backend: Backend,
   audio: Float32Array,
   language?: string,
+  partial = false,
 ): Promise<void> {
   const active: ActiveRequest = { aborted: false }
   activeRequests.set(requestId, active)
@@ -613,6 +614,15 @@ async function transcribe(
         : Array.isArray(result)
           ? result.map((item: any) => item?.text ?? '').join(' ').trim()
           : ''
+
+    if (partial) {
+      // Windowed hypotheses are advisory. An empty window is normal between
+      // words and must not be reported as an error.
+      if (!active.aborted) {
+        post({ type: 'transcript-partial', requestId, text })
+      }
+      return
+    }
 
     if (!text) {
       throw new Error(
@@ -913,6 +923,7 @@ ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
         message.backend,
         message.audio,
         message.language,
+        message.partial === true,
       )
       break
 

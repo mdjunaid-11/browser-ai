@@ -33,6 +33,12 @@ export function createDefaultSettings(): AppSettings {
     autoSpeak: false,
     autoSubmitTranscript: false,
     voiceMode: 'push-to-talk',
+    // Private local recognition is the default; network-backed recognition is
+    // opt-in only and must never be selected silently.
+    asrEngine: 'private',
+    fastRecognitionAccepted: false,
+    voiceSilenceMs: 1600,
+    voiceMaxDurationMs: 60000,
     language: 'auto',
     browserVoiceURI: '',
     browserVoiceLang: '',
@@ -69,6 +75,10 @@ export function settingsForMode(
       contextTurns: 2,
       autoSpeak: false,
       reduceMotion: true,
+      asrEngine: 'private',
+      fastRecognitionAccepted: false,
+      voiceSilenceMs: 2000,
+      voiceMaxDurationMs: 30000,
     }
   }
 
@@ -167,6 +177,22 @@ export function normalizeSettings(input: unknown): AppSettings {
       raw.voiceMode === 'auto' || raw.voiceMode === 'text'
         ? raw.voiceMode
         : 'push-to-talk',
+    asrEngine:
+      raw.asrEngine === 'fast' || raw.asrEngine === 'auto'
+        ? raw.asrEngine
+        : 'private',
+    fastRecognitionAccepted: Boolean(raw.fastRecognitionAccepted),
+    voiceSilenceMs: Math.round(
+      clamp(Number(raw.voiceSilenceMs), 800, 5000, defaults.voiceSilenceMs),
+    ),
+    voiceMaxDurationMs: Math.round(
+      clamp(
+        Number(raw.voiceMaxDurationMs),
+        15000,
+        180000,
+        defaults.voiceMaxDurationMs,
+      ),
+    ),
     language:
       raw.language === 'en' || raw.language === 'hi' ? raw.language : 'auto',
     browserVoiceURI:

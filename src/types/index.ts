@@ -9,6 +9,30 @@ export type ModelQuality = 'basic' | 'balanced' | 'high'
 export type TextModelArchitecture = 'seq2seq' | 'causal'
 export type TTSEngine = 'browser' | 'kokoro'
 export type VoiceMode = 'text' | 'push-to-talk' | 'auto'
+/** How speech is recognised. "fast" may use network-backed browser services. */
+export type AsrEngine = 'private' | 'fast' | 'auto'
+
+/**
+ * The single source of truth for whether chat is allowed. Only a successful
+ * text-model load can produce the READY state; ASR/TTS never affect it.
+ */
+export type TextModelSessionState =
+  | 'uninitialized'
+  | 'configuring'
+  | 'downloading'
+  | 'initializing'
+  | 'ready'
+  | 'error'
+
+export interface TextModelSession {
+  state: TextModelSessionState
+  modelId: string | null
+  backend: 'wasm' | 'webgpu' | null
+  progress: number
+  error: string | null
+  previousModelId: string | null
+  attempt: number
+}
 
 export const ANIMAL_IDS = [
   'cat',
@@ -122,6 +146,13 @@ export interface AppSettings {
   autoSpeak: boolean
   autoSubmitTranscript: boolean
   voiceMode: VoiceMode
+  asrEngine: AsrEngine
+  /** Explicit consent is required before any network-backed recognition. */
+  fastRecognitionAccepted: boolean
+  /** Silence needed before an utterance is finalised, in milliseconds. */
+  voiceSilenceMs: number
+  /** Hard cap on one recording, in milliseconds. */
+  voiceMaxDurationMs: number
   language: 'auto' | 'en' | 'hi'
   browserVoiceURI: string
   browserVoiceLang: string
@@ -197,4 +228,16 @@ export interface SpeechSynthesisSnapshot {
   paused: boolean
   text: string | null
   engine: TTSEngine | null
+}
+
+/** Measured (not estimated) timings for one voice-recognition session. */
+export interface VoiceRecognitionMetrics {
+  micStartMs: number
+  modelInitMs: number | null
+  timeToFirstPartialMs: number | null
+  finalLatencyMs: number | null
+  audioDurationMs: number
+  processingMs: number | null
+  engine: AsrEngine
+  partialCount: number
 }
